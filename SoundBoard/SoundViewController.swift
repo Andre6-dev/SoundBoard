@@ -12,15 +12,26 @@ class SoundViewController: UIViewController {
     
     @IBOutlet weak var agregarButton: UIButton!
     
+
+    @IBOutlet weak var volumeBar: UISlider!
+    
+    @IBOutlet weak var progressBar: UIProgressView!
+    
+    @IBOutlet weak var duracionOutlet: UILabel!
+    
     var grabarAudio:AVAudioRecorder?
     var reproducirAudio:AVAudioPlayer?
     var audioURL:URL?
+    var timer: Timer?
+    
+    var tiempo:Timer = Timer()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         configurarGrabacion()
         reproducirButton.isEnabled = false
         agregarButton.isEnabled = false
+        progressBar.isHidden = true
 
         // Do any additional setup after loading the view.
     }
@@ -64,10 +75,16 @@ class SoundViewController: UIViewController {
             grabarButton.setTitle("GRABAR", for: .normal)
             reproducirButton.isEnabled = true
             agregarButton.isEnabled = true
+            progressBar.isHidden = true
+            tiempo.invalidate()
         } else {
             grabarAudio?.record()
             grabarButton.setTitle("DETENER", for: .normal)
+            // Se crea el timer para que funcione como contador.
+            tiempo = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(tiempoTotal), userInfo: nil, repeats: true)
             reproducirButton.isEnabled = false
+            progressBar.isHidden = false
+            self.startTimer()
         }
     }
     
@@ -75,28 +92,57 @@ class SoundViewController: UIViewController {
         do {
             try reproducirAudio = AVAudioPlayer(contentsOf: audioURL!)
             reproducirAudio!.play()
+            reproducirAudio?.volume = volumeBar.value
+            progressBar.isHidden = false
+            self.startTimer()
             print("Reproduciendo")
-        } catch{}
+        } catch {}
         
     }
+    
+    @objc func tiempoTotal()-> Void{
+        let tiempoEnHora = Int(grabarAudio!.currentTime)
+        let minuto = (tiempoEnHora % 3600) / 60
+        let segundo = (tiempoEnHora % 3600) % 60
+        var tiempoConFormato = ""
+        tiempoConFormato += String(format:"%02d", minuto)
+        tiempoConFormato += ":"
+        tiempoConFormato += String(format: "%02d", segundo)
+        tiempoConFormato += ""
+        duracionOutlet.text! = tiempoConFormato
+    }
+    
+    
+    func startTimer() {
+             timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(self.updateRecordingProgress), userInfo: nil, repeats: true)
+            timer?.fire()
+        }
+    
+    @objc func updateRecordingProgress() {
+            //update your UIProgressView here
+            if reproducirAudio != nil && (reproducirAudio?.duration ?? TimeInterval(0)) > TimeInterval(0) {
+                self.progressBar.progress = Float(((reproducirAudio?.currentTime ?? 0) / (reproducirAudio?.duration ?? 1)))
+            }
+        }
+    
     
     @IBAction func agregarTapped(_ sender: Any) {
         let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
         let grabacion = Grabacion(context: context)
         grabacion.nombre = nombreTextField.text
+        let asset = AVURLAsset(url: audioURL!)
+        let audioDuration = asset.duration
+        let audioDurationSeconds = CMTimeGetSeconds(audioDuration)
+        let hours:Int = Int(audioDurationSeconds / 3600)
+        let minutes:Int = Int(audioDurationSeconds.truncatingRemainder(dividingBy: 3600) / 60)
+        let seconds:Int = Int(audioDurationSeconds.truncatingRemainder(dividingBy: 60))
+        let finalFormat: String = String(format: "%i:%02i:%02i", hours, minutes, seconds)
+        print(finalFormat)
+        grabacion.duracion = String(finalFormat)
         grabacion.audio = NSData(contentsOf: audioURL!)! as Data
         (UIApplication.shared.delegate as! AppDelegate).saveContext()
         navigationController!.popViewController(animated: true)
         
     }
     
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
 }
